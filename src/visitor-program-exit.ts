@@ -65,8 +65,23 @@ export function visitorProgramExit(
       // 使用 crypto.randomBytes 生成更安全的随机后缀（16 字节 = 32 个十六进制字符）
       const randomSuffix = randomBytes(16).toString('hex');
       const outputFilePath = `./.canyon_output/coverage-final-init-${randomSuffix}.json`;
+
+      // 添加 buildHash 和核心四字段到 .canyon_output 的产物中
+      // 根据架构设计，不再将 repoID、sha、provider 等业务信息直接插桩到代码产物中
+      // 而是生成 buildHash，并将核心字段写入到 .canyon_output 目录的覆盖率文件中
+      // 服务端可以通过 buildHash 查询对应的构建信息，也可以直接从文件中获取核心字段
+      const buildHash = generateBuildHash(config);
+      const coverageDataWithMetadata = {
+        ...initialCoverageData,
+        buildHash,
+        provider: config.provider,
+        repoID: config.repoID,
+        sha: config.sha,
+        buildTarget: config.buildTarget,
+      };
+
       const coverageDataObject: Record<string, CoverageData> = {
-        [initialCoverageData.path]: initialCoverageData,
+        [initialCoverageData.path]: coverageDataWithMetadata,
       };
 
       fs.writeFileSync(
