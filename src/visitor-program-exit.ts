@@ -5,6 +5,7 @@ import generate from '@babel/generator';
 import { generateBuildHash } from './helpers/generate-build-hash';
 import { generateInitialCoverage } from './helpers/generate-initial-coverage';
 import type { CanyonBabelPluginConfig } from './types';
+import * as path from "node:path";
 
 /**
  * 覆盖率数据接口
@@ -37,6 +38,19 @@ export function visitorProgramExit(
 ): VisitorProgramExitResult {
   const sourceCode = generate(programPath.node).code;
   const initialCoverageData = generateInitialCoverage(sourceCode, config);
+
+  // 尝试读取 source map 文件（如果 inputSourceMap 不存在）
+  if (initialCoverageData && !initialCoverageData.inputSourceMap) {
+    try {
+      if (initialCoverageData.path) {
+        const mapFilePath = path.resolve(initialCoverageData.path + '.map');
+        const pathString = fs.readFileSync(mapFilePath, 'utf-8');
+        initialCoverageData.inputSourceMap = JSON.parse(pathString);
+      }
+    } catch (_error) {
+      // 如果文件不存在或读取失败，忽略错误，继续执行
+    }
+  }
 
   // CI 环境下生成覆盖率文件
   if (config.ci) {
@@ -101,21 +115,10 @@ export function visitorProgramExit(
           if (hasInstrumentation) {
             const objectProperties = objectExpression.properties;
 
-            // 查找 inputSourceMap 属性的索引
-            const inputSourceMapPropertyIndex = objectProperties.findIndex(
-              (property) =>
-                (types.isObjectProperty(property) ||
-                  types.isObjectMethod(property)) &&
-                types.isObjectProperty(property) &&
-                types.isIdentifier(property.key, { name: 'inputSourceMap' }),
-            );
-
-            // 如果不保留 source map，则删除相关属性并替换 inputSourceMap
             // 注意：keepMap 属性不在配置接口中，这里保留原逻辑但添加注释说明
             const shouldKeepMap = false; // 默认不保留 map
             if (!shouldKeepMap) {
-              const keysToRemove = ['statementMap', 'fnMap', 'branchMap'];
-
+              const keysToRemove = ['statementMap', 'fnMap', 'branchMap','inputSourceMap'];
               keysToRemove.forEach((keyToRemove) => {
                 const propertyIndex = objectProperties.findIndex(
                   (property) =>
@@ -130,13 +133,13 @@ export function visitorProgramExit(
                 }
               });
 
-              if (inputSourceMapPropertyIndex !== -1) {
-                objectProperties[inputSourceMapPropertyIndex] =
-                  types.objectProperty(
-                    types.identifier('inputSourceMap'),
-                    types.numericLiteral(1),
-                  );
-              }
+              // 添加 hasInputSourceMap 属性
+              const hasInputSourceMap = !!initialCoverageData?.inputSourceMap;
+              const hasInputSourceMapProperty = types.objectProperty(
+                types.identifier('hasInputSourceMap'),
+                types.booleanLiteral(hasInputSourceMap),
+              );
+              objectProperties.push(hasInputSourceMapProperty);
             }
 
             // 添加 buildHash 元数据属性
