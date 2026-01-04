@@ -54,7 +54,7 @@ export function visitorProgramExit(
 
   // CI 环境下生成覆盖率文件
   if (config.ci) {
-    const outputDir = './.canyon_output';
+    const outputDir = path.resolve(config.instrumentCwd, '.canyon_output');
 
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
@@ -64,7 +64,10 @@ export function visitorProgramExit(
     if (initialCoverageData?.path) {
       // 使用 crypto.randomBytes 生成更安全的随机后缀（16 字节 = 32 个十六进制字符）
       const randomSuffix = randomBytes(16).toString('hex');
-      const outputFilePath = `./.canyon_output/coverage-final-init-${randomSuffix}.json`;
+      const outputFilePath = path.resolve(
+        outputDir,
+        `coverage-final-init-${randomSuffix}.json`,
+      );
 
       // 添加 buildHash 和核心四字段到 .canyon_output 的产物中
       // 根据架构设计，不再将 repoID、sha、provider 等业务信息直接插桩到代码产物中
@@ -78,6 +81,7 @@ export function visitorProgramExit(
         repoID: config.repoID,
         sha: config.sha,
         buildTarget: config.buildTarget,
+        instrumentCwd: config.instrumentCwd,
       };
 
       const coverageDataObject: Record<string, CoverageData> = {
